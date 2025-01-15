@@ -63,6 +63,7 @@ public class Socket extends Emitter {
     private Queue<On.Handle> subs;
     private final Queue<List<Object>> receiveBuffer = new ConcurrentLinkedQueue<>();
     private final Queue<Packet<JSONArray>> sendBuffer = new ConcurrentLinkedQueue<>();
+    private boolean isVolatile;
 
     private ConcurrentLinkedQueue<Listener> onAnyIncomingListeners = new ConcurrentLinkedQueue<>();
     private ConcurrentLinkedQueue<Listener> onAnyOutgoingListeners = new ConcurrentLinkedQueue<>();
@@ -242,8 +243,13 @@ public class Socket extends Emitter {
                     Socket.this.acks.put(ackId, ack);
                     packet.id = ids++;
                 }
+                final boolean isTransportWritable = io.engine != null && io.engine.checkTransportWritable();
+                final boolean discardPackage = isVolatile && (!isTransportWritable || !connected);
 
-                if (Socket.this.connected) {
+                if (discardPackage) {
+                    logger.log(Level.FINE, "discard package");
+                }
+                else if (Socket.this.connected) {
                     Socket.this.packet(packet);
                 } else {
                     Socket.this.sendBuffer.add(packet);
@@ -489,6 +495,15 @@ public class Socket extends Emitter {
                 }
             }
         });
+        return this;
+    }
+
+    /**
+     * converts the socket into a volatile socket and returns
+     * @return the volatile socket
+     */
+    public Socket getVolatile() {
+        this.isVolatile = true;
         return this;
     }
 
